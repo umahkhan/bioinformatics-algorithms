@@ -42,7 +42,36 @@ def get_island_indices(hidden_states):
     return island_indices
 
 
-def plot_cpg_interactive(outcome, viterbi_call, p_cpg_island):
+def run_detection(hmm, outcome, island_indices):
+    """Runs Viterbi + soft decoding for a given (already-parameterized) HMM."""
+    raw_hidden_path = hmm.viterbi_log(outcome)
+    viterbi_call = ["I" if hmm.hidden_states.index(s) in island_indices else "N" for s in raw_hidden_path]
+
+    log_prob, fwd = hmm.forward_log(outcome)
+    bwd = hmm.backward_log(outcome)
+    posteriors = hmm.soft_decoding_log(log_prob, fwd, bwd)  # shape (states, sites) -- no transpose in this hmm.py
+    p_cpg_island = posteriors[island_indices, :].sum(axis=0)
+
+    return viterbi_call, p_cpg_island
+
+
+def matrix_to_html_table(matrix, row_labels, col_labels, title):
+    """Renders a small numpy matrix as an HTML table, for showing HMM parameters above a plot."""
+    header_cells = "".join(f"<th style='padding:4px 10px;border-bottom:1px solid #ccc;'>{c}</th>" for c in col_labels)
+    rows_html = ""
+    for i, row_label in enumerate(row_labels):
+        cells = "".join(f"<td style='padding:4px 10px;'>{matrix[i, j]:.3f}</td>" for j in range(len(col_labels)))
+        rows_html += f"<tr><td style='padding:4px 10px;font-weight:bold;'>{row_label}</td>{cells}</tr>"
+    return f"""
+    <div style="margin-bottom:6px;font-weight:600;color:#2c2c2a;">{title}</div>
+    <table style="border-collapse:collapse;font-family:sans-serif;font-size:13px;margin-bottom:18px;">
+        <tr><td></td>{header_cells}</tr>
+        {rows_html}
+    </table>
+    """
+
+
+def plot_cpg_interactive(outcome, viterbi_call, p_cpg_island, title):
     import plotly.graph_objects as go
 
     sites = list(range(len(outcome)))
@@ -78,7 +107,7 @@ def plot_cpg_interactive(outcome, viterbi_call, p_cpg_island):
     ))
 
     fig.update_layout(
-        title=dict(text="CpG island detection", font=dict(size=15, color="#2c2c2a")),
+        title=dict(text=title, font=dict(size=15, color="#2c2c2a")),
         xaxis_title="Site (bp position)",
         yaxis_title="P(CpG island)",
         yaxis=dict(range=[0, 1.05], tickformat=".0%", gridcolor="#e1e0d9", zeroline=False),
@@ -93,39 +122,102 @@ def plot_cpg_interactive(outcome, viterbi_call, p_cpg_island):
     return fig
 
 
+def build_combined_html(outcome, hidden_states, outcome_states,
+                         before_transition, before_emission, before_call, before_prob,
+                         after_transition, after_emission, after_call, after_prob,
+                         num_iterations, html_path):
+    fig_before = plot_cpg_interactive(outcome, before_call, before_prob, "CpG island detection — before parameter optimization")
+    fig_after = plot_cpg_interactive(outcome, after_call, after_prob, f"CpG island detection — after Baum-Welch parameter optimization ({num_iterations} iterations)")
+
+    before_transition_table = matrix_to_html_table(before_transition, hidden_states, hidden_states, "Transition matrix (initial guess)")
+    before_emission_table = matrix_to_html_table(before_emission, hidden_states, outcome_states, "Emission matrix (initial guess)")
+    after_transition_table = matrix_to_html_table(after_transition, hidden_states, hidden_states, f"Transition matrix (learned via Baum-Welch, {num_iterations} iterations)")
+    after_emission_table = matrix_to_html_table(after_emission, hidden_states, outcome_states, f"Emission matrix (learned via Baum-Welch, {num_iterations} iterations)")
+
+    plotly_js = "cdn"
+    before_div = fig_before.to_html(full_html=False, include_plotlyjs=plotly_js)
+    after_div = fig_after.to_html(full_html=False, include_plotlyjs=False)
+
+    html = f"""
+    <html>
+    <head><meta charset="utf-8"><title>CpG Island Detection — Baum-Welch Parameter Estimation</title></head>
+    <body style="font-family:sans-serif;max-width:900px;margin:30px auto;">
+        <h1 style="color:#2c2c2a;">CpG Island Detection with Baum-Welch Parameter Estimation</h1>
+        <p style="color:#555;">
+            This report shows CpG island detection <b>before</b> parameter optimization (using the
+            starting parameter guesses) and <b>after</b> running Baum-Welch learning for
+            <b>{num_iterations} iteration(s)</b> to re-estimate the transition and emission matrices
+            directly from this sequence.
+        </p>
+
+        <h2 style="color:#2c2c2a;border-bottom:2px solid #199e70;padding-bottom:4px;">Before parameter optimization</h2>
+        {before_transition_table}
+        {before_emission_table}
+        {before_div}
+
+        <h2 style="color:#2c2c2a;border-bottom:2px solid #2a78d6;padding-bottom:4px;margin-top:40px;">
+            After parameter optimization (Baum-Welch, {num_iterations} iterations)
+        </h2>
+        {after_transition_table}
+        {after_emission_table}
+        {after_div}
+    </body>
+    </html>
+    """
+
+    with open(html_path, "w") as f:
+        f.write(html)
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Detect CpG islands in a DNA sequence using an HMM.")
+    parser = argparse.ArgumentParser(description="Detect CpG islands in a DNA sequence using an HMM, "
+                                                   "with optional Baum-Welch parameter estimation.")
     parser.add_argument("fasta_path", help="Path to input FASTA file")
     parser.add_argument("param_file", help="Path to HMM parameter file (states + transition + emission matrices)")
+    parser.add_argument("-n", "--baum-welch-iterations", type=int, default=10,
+                         help="Number of Baum-Welch iterations to run for parameter estimation (default: 10)")
+    parser.add_argument("-o", "--output-name", default=None,
+                         help="Base name for output files (produces <name>.txt and <name>.html). "
+                              "Defaults to the input FASTA filename (without extension).")
     args = parser.parse_args()
 
-    output_path = "cpg_results.txt"
-    html_path = "cpg_results.html"
+    output_name = args.output_name or os.path.splitext(os.path.basename(args.fasta_path))[0]
+    output_path = f"{output_name}.txt"
+    html_path = f"{output_name}.html"
 
     outcome = list(parse_fasta(args.fasta_path).values())[0]
     params = parse_hmm_params(args.param_file)
-    hmm = HiddenMarkovModel(params["outcome_states"], params["hidden_states"],
-                             params["emission_matrix"], params["transition_matrix"])
+    hidden_states = params["hidden_states"]
+    outcome_states = params["outcome_states"]
+    island_indices = get_island_indices(hidden_states)
 
-    island_indices = get_island_indices(params["hidden_states"])
+    # --- BEFORE parameter optimization ---
+    hmm_before = HiddenMarkovModel(outcome_states, hidden_states, params["emission_matrix"], params["transition_matrix"])
+    before_call, before_prob = run_detection(hmm_before, outcome, island_indices)
 
-    raw_hidden_path = hmm.viterbi_log(outcome)
-    viterbi_call = ["I" if params["hidden_states"].index(s) in island_indices else "N" for s in raw_hidden_path]
+    # --- Baum-Welch parameter estimation ---
+    print(f"Running Baum-Welch learning for {args.baum_welch_iterations} iteration(s)...")
+    learned_transition, learned_emission = hmm_before.baum_welch_learning_log(args.baum_welch_iterations, outcome)
 
-    log_prob, fwd = hmm.forward_log(outcome)
-    bwd = hmm.backward_log(outcome)
-    posteriors = hmm.soft_decoding_log(log_prob, fwd, bwd)  # shape (sites, states)
-    p_cpg_island = posteriors[:, island_indices].sum(axis=1)
+    # --- AFTER parameter optimization ---
+    hmm_after = HiddenMarkovModel(outcome_states, hidden_states, learned_emission, learned_transition)
+    after_call, after_prob = run_detection(hmm_after, outcome, island_indices)
 
+    # --- write text table (final, post-optimization results) ---
     with open(output_path, "w") as f:
         f.write("site\tbase\tviterbi_call\tp_cpg_island\n")
         for i in range(len(outcome)):
-            f.write(f"{i}\t{outcome[i]}\t{viterbi_call[i]}\t{p_cpg_island[i]:.4f}\n")
-    print(f"Wrote {len(outcome)} rows to {output_path}")
+            f.write(f"{i}\t{outcome[i]}\t{after_call[i]}\t{after_prob[i]:.4f}\n")
+    print(f"Wrote {len(outcome)} rows to {output_path} (post-Baum-Welch results)")
 
-    fig = plot_cpg_interactive(outcome, viterbi_call, p_cpg_island)
-    fig.write_html(html_path)
-    print(f"Wrote interactive plot to {html_path}")
+    # --- write combined before/after HTML report ---
+    build_combined_html(
+        outcome, hidden_states, outcome_states,
+        params["transition_matrix"], params["emission_matrix"], before_call, before_prob,
+        learned_transition, learned_emission, after_call, after_prob,
+        args.baum_welch_iterations, html_path,
+    )
+    print(f"Wrote interactive before/after report to {html_path}")
     webbrowser.open(f"file://{os.path.abspath(html_path)}")
 
 

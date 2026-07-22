@@ -5,8 +5,9 @@ from scipy.special import logsumexp
 class HiddenMarkovModel:
     """
     A Hidden Markov Model supporting Viterbi decoding, Forward/Backward
-    evaluation, and soft (posterior) decoding — in both linear-probability and
-    numerically stable log-probability forms. Supports any number of states.
+    evaluation, soft (posterior) decoding, and Baum-Welch parameter
+    estimation — in both linear-probability and numerically stable
+    log-probability forms. Supports any number of states.
 
     Parameters
     ----------
@@ -157,7 +158,84 @@ class HiddenMarkovModel:
     # Soft (posterior) decoding
     # ------------------------------------------------------------------
     def soft_decoding(self, prob_of_sequence, forward_scores, backward_scores):
-        return ((forward_scores * backward_scores) / prob_of_sequence).T
+        return ((forward_scores * backward_scores) / prob_of_sequence)
 
     def soft_decoding_log(self, prob_of_sequence, forward_scores, backward_scores):
-        return np.exp(((forward_scores + backward_scores) - prob_of_sequence).T)
+        return np.exp(((forward_scores + backward_scores) - prob_of_sequence))
+
+    # ------------------------------------------------------------------
+    # Baum-Welch parameter estimation — linear probability version
+    # ------------------------------------------------------------------
+    def baum_welch_learning(self, num_iterations, outcome):
+        outcome_states = self.outcome_states
+        hidden_states = self.hidden_states
+        transition_matrix = self.transition_matrix
+        emission_matrix = self.emission_matrix
+
+        outcome_array = np.array(list(outcome))
+        for iteration in range(num_iterations):
+            hmm = HiddenMarkovModel(outcome_states, hidden_states, emission_matrix, transition_matrix)
+            prob_of_sequence, forward_scores = hmm.forward(outcome)
+            backward_scores = hmm.backward(outcome)
+            posterior_probabilities = hmm.soft_decoding(prob_of_sequence, forward_scores, backward_scores)
+            updated_emission_matrix = np.zeros((len(hidden_states), len(outcome_states)))
+            for state_idx in range(len(hidden_states)):
+                for symbol_idx in range(len(outcome_states)):
+                    updated_emission_matrix[state_idx, symbol_idx] = posterior_probabilities[state_idx, :][outcome_array == outcome_states[symbol_idx]].sum()
+                updated_emission_matrix[state_idx, :] = updated_emission_matrix[state_idx, :] / updated_emission_matrix[state_idx, :].sum()
+            updated_transition_matrix = np.zeros((len(hidden_states), len(hidden_states)))
+            for site in range(len(outcome) - 1):
+                forward_current_state = forward_scores[:, site].reshape(-1, 1)
+                backward_next_state = backward_scores[:, site + 1]
+                emission_next_symbol = emission_matrix[:, outcome_states.index(outcome[site + 1])]
+                updated_transition_matrix += (forward_current_state * backward_next_state * emission_next_symbol * transition_matrix) / prob_of_sequence
+            row_totals = updated_transition_matrix.sum(axis=1).reshape(-1, 1)
+            updated_transition_matrix = np.divide(updated_transition_matrix, row_totals,
+                                                   out=np.full_like(updated_transition_matrix, 1 / len(hidden_states)),
+                                                   where=row_totals != 0)
+            transition_matrix = updated_transition_matrix
+            emission_matrix = updated_emission_matrix
+        return transition_matrix, emission_matrix
+
+    # ------------------------------------------------------------------
+    # Baum-Welch parameter estimation — log-space version (numerically
+    # stable for longer sequences / more iterations)
+    # ------------------------------------------------------------------
+    def baum_welch_learning_log(self, num_iterations, outcome):
+        outcome_states = self.outcome_states
+        hidden_states = self.hidden_states
+        transition_matrix = self.transition_matrix
+        emission_matrix = self.emission_matrix
+
+        outcome_array = np.array(list(outcome))
+        for iteration in range(num_iterations):
+            hmm = HiddenMarkovModel(outcome_states, hidden_states, emission_matrix, transition_matrix)
+            log_prob_of_sequence, log_forward_scores = hmm.forward_log(outcome)
+            log_backward_scores = hmm.backward_log(outcome)
+            posterior_probabilities = hmm.soft_decoding_log(log_prob_of_sequence, log_forward_scores, log_backward_scores)
+            updated_emission_matrix = np.zeros((len(hidden_states), len(outcome_states)))
+            for state_idx in range(len(hidden_states)):
+                for symbol_idx in range(len(outcome_states)):
+                    updated_emission_matrix[state_idx, symbol_idx] = posterior_probabilities[state_idx, :][outcome_array == outcome_states[symbol_idx]].sum()
+                updated_emission_matrix[state_idx, :] = updated_emission_matrix[state_idx, :] / updated_emission_matrix[state_idx, :].sum()
+            log_transition_matrix = np.log(transition_matrix)
+            log_emission_matrix = np.log(emission_matrix)
+            log_T_grids = []
+            for site in range(len(outcome) - 1):
+                log_forward_current_state = log_forward_scores[:, site].reshape(-1, 1)
+                log_backward_next_state = log_backward_scores[:, site + 1]
+                log_emission_next_symbol = log_emission_matrix[:, outcome_states.index(outcome[site + 1])]
+                log_T_lk_site = (log_forward_current_state + log_backward_next_state + log_emission_next_symbol + log_transition_matrix) - log_prob_of_sequence
+                log_T_grids.append(log_T_lk_site)
+            log_T_stack = np.stack(log_T_grids, axis=0)
+            log_transition_totals = logsumexp(log_T_stack, axis=0)
+            updated_transition_matrix = np.exp(log_transition_totals)
+            row_totals = updated_transition_matrix.sum(axis=1).reshape(-1, 1)
+            updated_transition_matrix = np.divide(
+                updated_transition_matrix, row_totals,
+                out=np.full_like(updated_transition_matrix, 1 / len(hidden_states)),
+                where=row_totals != 0
+            )
+            transition_matrix = updated_transition_matrix
+            emission_matrix = updated_emission_matrix
+        return transition_matrix, emission_matrix
