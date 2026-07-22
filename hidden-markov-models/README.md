@@ -13,6 +13,9 @@ first principles, applied to detecting CpG islands in real genomic DNA.
   the command-line interface, parameter optimization, and the interactive
   before/after report. Imports `HiddenMarkovModel` from `hmm.py` rather than
   duplicating it.
+- **`results/`** — pre-generated example outputs (2-state and 8-state runs
+  for both TP53 and GAPDH), so you can inspect results without re-running
+  anything.
 
 ## Algorithms implemented
 
@@ -112,27 +115,27 @@ Both `hmm.py` and `cpg_cli.py` need to be in the same directory. Requires
 
 Both genes were run through the 2-state model and the 8-state dinucleotide
 model, to show concretely how much the state topology affects what gets
-detected.
+detected. Pre-generated outputs are in [`results/`](results).
 
 ### TP53 promoter
 
 ```bash
-python3 cpg_cli.py tp53_promoter.fasta cpg_hmm_parameters.txt -n 5 -o tp53_2state_model
-python3 cpg_cli.py tp53_promoter.fasta cpg_hmm_parameters_8state.txt -n 5 -o tp53_8state_model
+python3 cpg_cli.py tp53_promoter.fasta cpg_hmm_parameters.txt -n 10 -o results/tp53_2state_model
+python3 cpg_cli.py tp53_promoter.fasta cpg_hmm_parameters_8state.txt -n 10 -o results/tp53_8state_model
 ```
 
-- **[2-state report](https://htmlpreview.github.io/?https://raw.githubusercontent.com/umahkhan/bioinformatics-algorithms/main/hidden-markov-models/tp53_2state_model.html)** — 5 islands called, lengths `[247, 448, 449, 509, 160]` (1813bp total)
-- **[8-state report](https://htmlpreview.github.io/?https://raw.githubusercontent.com/umahkhan/bioinformatics-algorithms/main/hidden-markov-models/tp53_8state_model.html)** — 5 islands called, lengths `[127, 353, 91, 46, 196]` (813bp total)
+- **[2-state report](https://htmlpreview.github.io/?https://raw.githubusercontent.com/umahkhan/bioinformatics-algorithms/main/hidden-markov-models/results/tp53_2state_model.html)** — 5 islands called, lengths `[247, 448, 449, 509, 160]` (1813bp total)
+- **[8-state report](https://htmlpreview.github.io/?https://raw.githubusercontent.com/umahkhan/bioinformatics-algorithms/main/hidden-markov-models/results/tp53_8state_model.html)** — 5 islands called, lengths `[127, 353, 91, 46, 196]` (813bp total)
 
 ### GAPDH promoter
 
 ```bash
-python3 cpg_cli.py gapdh_promoter.fasta cpg_hmm_parameters.txt -n 5 -o gapdh_2state_model
-python3 cpg_cli.py gapdh_promoter.fasta cpg_hmm_parameters_8state.txt -n 5 -o gapdh_8state_model
+python3 cpg_cli.py gapdh_promoter.fasta cpg_hmm_parameters.txt -n 10 -o results/gapdh_2state_model
+python3 cpg_cli.py gapdh_promoter.fasta cpg_hmm_parameters_8state.txt -n 10 -o results/gapdh_8state_model
 ```
 
-- **[2-state report](https://htmlpreview.github.io/?https://raw.githubusercontent.com/umahkhan/bioinformatics-algorithms/main/hidden-markov-models/gapdh_2state_model.html)** — 1 island called, spanning 1930bp
-- **[8-state report](https://htmlpreview.github.io/?https://raw.githubusercontent.com/umahkhan/bioinformatics-algorithms/main/hidden-markov-models/gapdh_8state_model.html)** — 4 islands called, lengths `[75, 46, 50, 1068]` (1239bp total)
+- **[2-state report](https://htmlpreview.github.io/?https://raw.githubusercontent.com/umahkhan/bioinformatics-algorithms/main/hidden-markov-models/results/gapdh_2state_model.html)** — 1 island called, spanning 1930bp
+- **[8-state report](https://htmlpreview.github.io/?https://raw.githubusercontent.com/umahkhan/bioinformatics-algorithms/main/hidden-markov-models/results/gapdh_8state_model.html)** — 4 islands called, lengths `[75, 46, 50, 1068]` (1239bp total)
 
 ### What the comparison shows
 
