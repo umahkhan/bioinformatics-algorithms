@@ -110,49 +110,41 @@ Both `hmm.py` and `cpg_cli.py` need to be in the same directory. Requires
 
 ## Results
 
-### TP53 promoter (8-state model)
+Both genes were run through the 2-state model and the 8-state dinucleotide
+model, to show concretely how much the state topology affects what gets
+detected.
+
+### TP53 promoter
 
 ```bash
-python3 cpg_cli.py tp53_promoter.fasta cpg_hmm_parameters_8state.txt -n 5
+python3 cpg_cli.py tp53_promoter.fasta cpg_hmm_parameters.txt -n 5 -o tp53_2state_model
+python3 cpg_cli.py tp53_promoter.fasta cpg_hmm_parameters_8state.txt -n 5 -o tp53_8state_model
 ```
 
-**[View interactive TP53 report](https://htmlpreview.github.io/?https://raw.githubusercontent.com/umahkhan/bioinformatics-algorithms/main/hidden-markov-models/tp53_promoter.html)**
+- **[2-state report](https://htmlpreview.github.io/?https://raw.githubusercontent.com/umahkhan/bioinformatics-algorithms/main/hidden-markov-models/tp53_2state_model.html)** — 5 islands called, lengths `[247, 448, 449, 509, 160]` (1813bp total)
+- **[8-state report](https://htmlpreview.github.io/?https://raw.githubusercontent.com/umahkhan/bioinformatics-algorithms/main/hidden-markov-models/tp53_8state_model.html)** — 5 islands called, lengths `[127, 353, 91, 46, 196]` (813bp total)
 
-Baum-Welch-refined parameters detected 5 island regions in this 3001bp
-window, the largest spanning 353bp. Sample rows near the start of the
-first detected island:
-
-```
-site    base    viterbi_call    p_cpg_island
-534     G       I               0.7629
-535     C       I               0.7895
-536     A       I               0.8737
-537     C       I               0.9186
-538     C       I               0.9759
-539     G       I               0.9837
-```
-
-### GAPDH promoter (8-state model)
+### GAPDH promoter
 
 ```bash
-python3 cpg_cli.py gapdh_promoter.fasta cpg_hmm_parameters_8state.txt -n 5
+python3 cpg_cli.py gapdh_promoter.fasta cpg_hmm_parameters.txt -n 5 -o gapdh_2state_model
+python3 cpg_cli.py gapdh_promoter.fasta cpg_hmm_parameters_8state.txt -n 5 -o gapdh_8state_model
 ```
 
-**[View interactive GAPDH report](https://htmlpreview.github.io/?https://raw.githubusercontent.com/umahkhan/bioinformatics-algorithms/main/hidden-markov-models/gapdh_promoter.html)**
+- **[2-state report](https://htmlpreview.github.io/?https://raw.githubusercontent.com/umahkhan/bioinformatics-algorithms/main/hidden-markov-models/gapdh_2state_model.html)** — 1 island called, spanning 1930bp
+- **[8-state report](https://htmlpreview.github.io/?https://raw.githubusercontent.com/umahkhan/bioinformatics-algorithms/main/hidden-markov-models/gapdh_8state_model.html)** — 4 islands called, lengths `[75, 46, 50, 1068]` (1239bp total)
 
-4 island regions detected, including one very large 1068bp stretch near
-the end of the window — consistent with GAPDH's known status as a
-CpG-island-rich housekeeping gene promoter. Sample rows from the start of
-the sequence, which begins directly inside an island:
+### What the comparison shows
 
-```
-site    base    viterbi_call    p_cpg_island
-0       G       I               0.7697
-1       G       I               0.7748
-2       A       I               0.7757
-3       G       I               0.7791
-4       T       I               0.7811
-```
+The 2-state model, which only tracks overall GC-richness, tends to call
+one broad, merged region — GAPDH's result is the clearest example, where
+it collapses everything into a single 1930bp island. The 8-state model,
+which tracks actual C→G (CpG) transition frequency rather than marginal
+base composition, resolves the same region into several more precise,
+separately-bounded islands — matching the fact that the 2-state model's
+emission distribution genuinely can't distinguish "broadly GC-rich" from
+"specifically CpG-enriched," while the 8-state model's transition matrix
+can.
 
 *(Note: if your repo's default branch is `master` rather than `main`,
 update the links above accordingly — check your repo settings if they
