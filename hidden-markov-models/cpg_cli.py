@@ -134,7 +134,7 @@ def build_combined_html(outcome, hidden_states, outcome_states,
     after_transition_table = matrix_to_html_table(after_transition, hidden_states, hidden_states, f"Transition matrix (learned via Baum-Welch, {num_iterations} iterations)")
     after_emission_table = matrix_to_html_table(after_emission, hidden_states, outcome_states, f"Emission matrix (learned via Baum-Welch, {num_iterations} iterations)")
 
-    plotly_js = "cdn"
+    plotly_js = True  # embed the full Plotly library inline (no external CDN request)
     before_div = fig_before.to_html(full_html=False, include_plotlyjs=plotly_js)
     after_div = fig_after.to_html(full_html=False, include_plotlyjs=False)
 
