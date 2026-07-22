@@ -91,8 +91,6 @@ promoter regions of well-characterized CpG-island-containing genes:
   (minus strand), the TP53 promoter, ~3001bp.
 - **`gapdh_promoter.fasta`** — chromosome 12, `chr12:6,533,500-6,536,500`,
   the GAPDH promoter, ~3001bp.
-- **`cpg_test_sequence.fasta`** — a small 231bp synthetic sequence with a
-  deliberately embedded CpG-rich region, used for quick sanity checks.
 
 ## Running it
 
@@ -107,28 +105,55 @@ python3 cpg_cli.py <fasta_file> <param_file> [-n ITERATIONS] [-o OUTPUT_NAME]
   (without extension), so running on different sequences won't overwrite
   each other's results.
 
-Example:
+Both `hmm.py` and `cpg_cli.py` need to be in the same directory. Requires
+`numpy`, `scipy`, and `plotly`.
+
+## Results
+
+### TP53 promoter (8-state model)
+
 ```bash
-python3 cpg_cli.py tp53_promoter.fasta cpg_hmm_parameters_8state.txt -n 10
+python3 cpg_cli.py tp53_promoter.fasta cpg_hmm_parameters_8state.txt -n 5
 ```
 
-produces `tp53_promoter.txt` (final, post-Baum-Welch results) and
-`tp53_promoter.html` — an interactive report showing, for both before and
-after parameter optimization: the transition and emission matrices used,
-and a hoverable plot of Viterbi calls plus soft-decoding P(CpG island) per
-site.
+**[View interactive TP53 report](https://htmlpreview.github.io/?https://raw.githubusercontent.com/umahkhan/bioinformatics-algorithms/main/hidden-markov-models/tp53_promoter.html)**
 
-Output table columns: site, base, Viterbi call, and soft-decoding
-P(CpG island):
+Baum-Welch-refined parameters detected 5 island regions in this 3001bp
+window, the largest spanning 353bp. Sample rows near the start of the
+first detected island:
 
 ```
 site    base    viterbi_call    p_cpg_island
-536     A       N               0.6790
-537     C       N               0.7451
-538     C       I               0.8573
-539     G       I               0.9332
-540     C       I               0.9536
+534     G       I               0.7629
+535     C       I               0.7895
+536     A       I               0.8737
+537     C       I               0.9186
+538     C       I               0.9759
+539     G       I               0.9837
 ```
 
-Both `hmm.py` and `cpg_cli.py` need to be in the same directory. Requires
-`numpy`, `scipy`, and `plotly`.
+### GAPDH promoter (8-state model)
+
+```bash
+python3 cpg_cli.py gapdh_promoter.fasta cpg_hmm_parameters_8state.txt -n 5
+```
+
+**[View interactive GAPDH report](https://htmlpreview.github.io/?https://raw.githubusercontent.com/umahkhan/bioinformatics-algorithms/main/hidden-markov-models/gapdh_promoter.html)**
+
+4 island regions detected, including one very large 1068bp stretch near
+the end of the window — consistent with GAPDH's known status as a
+CpG-island-rich housekeeping gene promoter. Sample rows from the start of
+the sequence, which begins directly inside an island:
+
+```
+site    base    viterbi_call    p_cpg_island
+0       G       I               0.7697
+1       G       I               0.7748
+2       A       I               0.7757
+3       G       I               0.7791
+4       T       I               0.7811
+```
+
+*(Note: if your repo's default branch is `master` rather than `main`,
+update the links above accordingly — check your repo settings if they
+404.)*
